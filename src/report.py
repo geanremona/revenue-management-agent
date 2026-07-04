@@ -9,6 +9,8 @@ revenue manager can review, sanity-check, and sign off in one place.
 from __future__ import annotations
 from datetime import datetime
 from typing import List, Dict
+import requests
+import os
 
 from pricing_engine import RateRecommendation
 from anomaly import AnomalyFlag
@@ -21,8 +23,61 @@ def _fmt_money(x: float) -> str:
 
 
 class RevenueBriefGenerator:
-    def __init__(self, property_name: str = "Sample Property"):
+    def __init__(
+        self,
+        property_name: str = "Sample Property",
+        cloudflare_account_id: str | None = None,
+        cloudflare_api_token: str | None = None,
+    ):
         self.property_name = property_name
+        self.cf_account_id = cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
+        self.cf_api_token = cloudflare_api_token or os.environ.get("CLOUDFLARE_API_TOKEN")
+
+    def _generate_ai_commentary(
+        self,
+        recommendations: List[RateRecommendation],
+        anomalies: List[AnomalyFlag],
+        events: List[EventRecord]
+    ) -> str:
+        """Calls Cloudflare Workers AI to generate a narrative market commentary."""
+        if not self.cf_account_id or not self.cf_api_token:
+            return "*AI commentary disabled. Configure Cloudflare credentials to enable.*"
+
+        # Summarize context for the LLM
+        critical_anomalies = [a for a in anomalies if a.severity == "critical"]
+        context_lines = [
+            f"Property: {self.property_name}",
+            f"Total dates reviewed: {len(recommendations)}",
+            f"Rate increases recommended: {sum(1 for r in recommendations if r.change_pct > 0)}",
+            f"Rate decreases recommended: {sum(1 for r in recommendations if r.change_pct < 0)}",
+            f"Critical anomalies flagged: {len(critical_anomalies)}",
+        ]
+        if critical_anomalies:
+            context_lines.append("Critical Anomalies Detail:")
+            for a in critical_anomalies:
+                context_lines.append(f" - {a.stay_date}: {a.metric} deviated by {a.delta_pct}% ({a.note})")
+        if events:
+            context_lines.append("Key Events:")
+            for e in events:
+                context_lines.append(f" - {e.event} ({e.start_date} to {e.end_date}), Impact: {e.demand_impact}")
+
+        prompt = (
+            "You are an expert revenue manager. Based on the following data for this pricing cycle, "
+            "write a concise, 2-3 sentence executive market commentary explaining the primary drivers "
+            "behind this cycle's rate decisions. Do not offer greetings or filler text. Just the commentary.\n\n"
+            "Data:\n" + "\n".join(context_lines)
+        )
+
+        try:
+            url = f"https://api.cloudflare.com/client/v4/accounts/{self.cf_account_id}/ai/run/@cf/meta/llama-3.1-8b-instruct"
+            headers = {"Authorization": f"Bearer {self.cf_api_token}"}
+            payload = {"messages": [{"role": "user", "content": prompt}]}
+            resp = requests.post(url, headers=headers, json=payload, timeout=5)
+            resp.raise_for_status()
+            result = resp.json()
+            return result.get("result", {}).get("response", "").strip()
+        except Exception as e:
+            return f"*AI commentary generation failed: {str(e)}*"
 
     def build(
         self,
@@ -58,6 +113,12 @@ class RevenueBriefGenerator:
             f"{len(channel_results)}** rate pushes confirmed live"
             + (f", **{len(failed_pushes)} queued for retry**." if failed_pushes else ".")
         )
+        lines.append("")
+
+        # --- AI Market Commentary ---
+        lines.append("## AI Market Commentary")
+        ai_commentary = self._generate_ai_commentary(recommendations, anomalies, events)
+        lines.append(ai_commentary)
         lines.append("")
 
         # --- Rate recommendations ---

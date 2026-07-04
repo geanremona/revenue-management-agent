@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: revenue-agent
+  labels:
+    app: revenue-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: revenue-agent
+  template:
+    metadata:
+      labels:
+        app: revenue-agent
+    spec:
+      containers:
+      - name: web
+        image: revenue-agent:latest
+        imagePullPolicy: Never # Because we'll load the image directly into containerd
+        ports:
+        - containerPort: 8080
+        env:
+        - name: PROPERTY_NAME
+          value: "Harborview Grand (Demo)"
+        - name: CLOUDFLARE_ACCOUNT_ID
+          value: "" # Fill this in when credentials are provided
+        - name: CLOUDFLARE_API_TOKEN
+          value: "" # Fill this in when credentials are provided

@@ -1,186 +1,65 @@
-# Deploying to Vultr + Publishing for the Hackathon
+# Deployment Guide: SUSE Rancher (K3s)
 
-Two independent things to do: (1) get the app running on a Vultr instance,
-and (2) push the repo to public GitHub so it can be submitted.
+This guide covers migrating the Revenue Pilot deployment from a bare-metal `systemd` + `nginx` setup to a single-node lightweight Kubernetes cluster using SUSE Rancher's K3s.
 
----
+## 1. Prepare the Vultr Server
 
-## Part 1 — Put the code on GitHub (public repo)
-
-Do this first — it makes Part 2 a one-line `git clone` on the server.
+First, stop and disable the existing Nginx and systemd services to free up port 80 for the K3s LoadBalancer.
 
 ```bash
-cd revenue_agent
-git init
-git add .
-git commit -m "Initial commit: revenue management agent"
+sudo systemctl stop nginx
+sudo systemctl disable nginx
+sudo systemctl stop revenue-agent
+sudo systemctl disable revenue-agent
 ```
 
-Create a new **public** repo on GitHub (via github.com/new — do NOT initialize
-it with a README, since you already have one), then:
+## 2. Install Docker (If not installed)
+Since we are building the container on the server to avoid needing a public registry, ensure Docker is installed.
+```bash
+sudo apt-get update
+sudo apt-get install -y docker.io
+```
+
+## 3. Install K3s
+
+Run the official K3s installation script:
+```bash
+curl -sfL https://get.k3s.io | sh -
+```
+
+Configure `kubectl` access for the `deploy` user:
+```bash
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown $(id -u):$(id -g) ~/.kube/config
+export KUBECONFIG=~/.kube/config
+echo "export KUBECONFIG=~/.kube/config" >> ~/.bashrc
+```
+
+## 4. Build and Import the Image
+
+Build the Docker image locally on the VM, save it as a tarball, and import it into K3s's containerd runtime so the cluster can run it without pulling from a public registry.
 
 ```bash
-git branch -M main
-git remote add origin https://github.com/<your-username>/revenue-management-agent.git
-git push -u origin main
+cd /home/deploy/revenue_agent
+sudo docker build -t revenue-agent:latest .
+sudo docker save revenue-agent:latest | sudo k3s ctr images import -
 ```
 
-Before pushing, edit `LICENSE` to put your name in, and double check `.gitignore`
-is excluding `__pycache__/`, `.venv/`, and `.env` (it already does).
+## 5. Deploy to Kubernetes
 
-**For the hackathon submission**, your repo URL is what you submit. Make sure:
-- The README's top line clearly states what the project does (judges skim).
-- Add a "Live Demo" link once Part 2 is done (edit `README.md` and re-push).
-- Consider adding a short GIF/screenshot of the `/` page — hackathon judges
-  reward things they can see working in 10 seconds.
-
----
-
-## Part 2 — Deploy on a Vultr instance
-
-### 1. Spin up the instance
-
-- Vultr dashboard → **Deploy New Server** → Cloud Compute
-- Choose **Ubuntu 24.04 LTS**
-- Pick the smallest plan (this app is lightweight — 1 vCPU / 1GB RAM is plenty)
-- Add your SSH key under "SSH Keys" so you don't get a mailed password
-- Deploy, then copy the instance's IP address
-
-### 2. Connect and do basic setup
+Apply the Kubernetes manifests from the `k8s/` directory.
 
 ```bash
-ssh root@<your-vultr-ip>
-adduser deploy
-usermod -aG sudo deploy
-su - deploy
+kubectl apply -f k8s/
 ```
 
-Install dependencies:
-
+Verify the pods and services are running:
 ```bash
-sudo apt update && sudo apt upgrade -y
-sudo apt install -y python3-venv python3-pip git nginx
+kubectl get pods
+kubectl get svc
 ```
 
-### 3. Clone your repo and set up the app
+You should see `revenue-agent-service` allocated an external IP (or `<pending>` if accessing via the node's IP directly), but K3s's built-in ServiceLB will forward port 80 to your Flask application pods.
 
-```bash
-cd ~
-git clone https://github.com/<your-username>/revenue-management-agent.git revenue_agent
-cd revenue_agent
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-```
-
-Quick smoke test:
-
-```bash
-python3 app.py
-# in another terminal / or curl from your laptop:
-curl http://<your-vultr-ip>:8080/healthz
-```
-
-Ctrl+C to stop it once confirmed — you'll run it as a service instead.
-
-### 4. Run it as a persistent service (systemd)
-
-A ready-made unit file is in `deploy/revenue-agent.service`. Copy it in and
-enable it:
-
-```bash
-sudo cp ~/revenue_agent/deploy/revenue-agent.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now revenue-agent
-sudo systemctl status revenue-agent
-```
-
-It will now survive reboots and restart automatically if it crashes.
-
-**Option B — Docker instead of systemd**, if you'd rather containerize:
-
-```bash
-sudo apt install -y docker.io docker-compose-plugin
-sudo docker compose up -d --build
-```
-
-(`docker-compose.yml` maps container port 8080 to host port 80, so skip the
-Nginx step below if you go this route.)
-
-### 5. Put Nginx in front (so it's on port 80, not :8080)
-
-Skip this if you used Docker Compose above.
-
-```bash
-sudo tee /etc/nginx/sites-available/revenue-agent <<'EOF'
-server {
-    listen 80;
-    server_name _;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-EOF
-sudo ln -s /etc/nginx/sites-available/revenue-agent /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl restart nginx
-```
-
-### 6. Open the firewall
-
-In the Vultr dashboard → your instance → **Settings → Firewall**, attach or
-create a firewall group allowing:
-- TCP 22 (SSH) — restrict to your IP if possible
-- TCP 80 (HTTP)
-- TCP 443 (HTTPS, if you add a domain + SSL below)
-
-On the instance itself, if `ufw` is active:
-
-```bash
-sudo ufw allow 22
-sudo ufw allow 80
-sudo ufw allow 443
-```
-
-### 7. (Optional) Add a domain + HTTPS
-
-If you point a domain's A record at your Vultr IP:
-
-```bash
-sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d yourdomain.com
-```
-
-### 8. Verify
-
-Visit `http://<your-vultr-ip>/` (or your domain) — you should see the
-Revenue Strategy Brief rendered as a page, with a "Re-run agent" button.
-
----
-
-## Updating the live deployment after code changes
-
-```bash
-ssh deploy@<your-vultr-ip>
-cd revenue_agent
-git pull
-source .venv/bin/activate
-pip install -r requirements.txt
-sudo systemctl restart revenue-agent
-```
-
-(Or `sudo docker compose up -d --build` if using Docker.)
-
----
-
-## Checklist before submitting
-
-- [ ] Repo is public on GitHub
-- [ ] `README.md` explains the project and links to the live Vultr URL
-- [ ] `LICENSE` has your name
-- [ ] App is reachable at `http://<vultr-ip-or-domain>/` and returns the brief
-- [ ] `/healthz` returns `{"status": "ok"}`
-- [ ] No secrets/API keys committed (check `.gitignore` covers `.env`)
+Your application is now running in K3s and accessible at `http://<your-vultr-ip>/`!

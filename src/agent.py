@@ -35,6 +35,8 @@ class RevenueManagementAgent:
         occupancy_history_path: str,
         property_name: str = "Sample Property",
         auto_push_critical_anomalies: bool = False,
+        cloudflare_account_id: str | None = None,
+        cloudflare_api_token: str | None = None,
     ):
         self.booking_connector = BookingDataConnector(bookings_path)
         self.competitor_connector = CompetitorPricingConnector(competitor_path)
@@ -44,7 +46,11 @@ class RevenueManagementAgent:
         self.anomaly_detector = AnomalyDetector()
         self.pricing_engine = DynamicPricingEngine()
         self.channel_updater = ChannelRateUpdater()
-        self.report_generator = RevenueBriefGenerator(property_name=property_name)
+        self.report_generator = RevenueBriefGenerator(
+            property_name=property_name,
+            cloudflare_account_id=cloudflare_account_id,
+            cloudflare_api_token=cloudflare_api_token,
+        )
 
         self.auto_push_critical_anomalies = auto_push_critical_anomalies
 

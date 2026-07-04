@@ -40,6 +40,8 @@ def build_agent():
         occupancy_history_path=os.path.join(BASE, "data/occupancy_history.csv"),
         property_name=os.environ.get("PROPERTY_NAME", "Harborview Grand (Demo)"),
         auto_push_critical_anomalies=False,
+        cloudflare_account_id=os.environ.get("CLOUDFLARE_ACCOUNT_ID"),
+        cloudflare_api_token=os.environ.get("CLOUDFLARE_API_TOKEN"),
     )
 
 
