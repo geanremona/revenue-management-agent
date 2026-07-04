@@ -1,6 +1,7 @@
 # Revenue Pilot — Complete System Architecture
 
-> A full-stack revenue management system composed of a five-stage Python agent pipeline, a Flask/Gunicorn web service, and a glassmorphism SaaS dashboard.
+> A full-stack revenue management system composed of a **Multi-Step Agentic Workflow**, a Flask/Gunicorn web service, and a glassmorphism SaaS dashboard. 
+> Unlike a simple "retrieve-then-answer" (RAG) chatbot, this agent *perceives* real-time data, *analyzes* demand, *plans* pricing strategies, and *calls tools* to act autonomously on the environment—all while featuring an enterprise-grade "Human-in-the-Loop" fail-safe for critical anomalies.
 
 ---
 
@@ -83,6 +84,7 @@ Thin adapter layer. Each connector exposes a `fetch()` method; swapping a CSV re
 | `CompetitorPricingConnector` | `competitor_rates.csv` | `List[CompetitorRate]` + `market_index_by_date()` | RateGain / OTA Insight |
 | `EventCalendarConnector` | `events.json` | `List[EventRecord]` + `impact_by_date()` (date-expanded lookup) | PredictHQ / Ticketmaster / convention bureau |
 | `OccupancyHistoryConnector` | `occupancy_history.csv` | `by_current_date(stay_date)` → 364-day lookback | Data warehouse / BI store |
+| `FlightCancellationConnector` | Simulated Live API | `FlightCancellationRecord` (Wow Factor) | Local Airport / Aviation API |
 
 **Key data structures:**
 ```python
@@ -93,6 +95,7 @@ BookingRecord:  stay_date, bookings_on_the_books, rooms_available,
 CompetitorRate: stay_date, competitor, rate, source
 EventRecord:    event, start_date, end_date, expected_attendance,
                 demand_impact ("high"|"medium"|"low"), source
+FlightCancellationRecord: stay_date, cancelled_flights, estimated_stranded_passengers, source
 OccupancyHistoryRecord: stay_date_ly, occupancy_pct_ly, adr_ly, revpar_ly
 ```
 
@@ -129,13 +132,16 @@ Computes one `RateRecommendation` per stay date. The formula is deterministic an
 
 #### Rate Formula
 
-$$\text{Target} = \text{ADR}_{\text{current}} \times F_{\text{occ}} \times F_{\text{pace}} \times F_{\text{event}}$$
+#### Rate Formula
+
+$$\text{Target} = \text{ADR}_{\text{current}} \times F_{\text{occ}} \times F_{\text{pace}} \times F_{\text{event}} \times F_{\text{flight}}$$
 
 | Factor | Input signal | Scale |
 |---|---|---|
-| $F_{\text{occ}}$ | Occupancy % on the books | `0.90` → `1.12` across 6 bands |
+| $F_{\text{occ}}$ | Occupancy % on the books | `0.87` → `1.20` across 6 bands |
 | $F_{\text{pace}}$ | 7-day room pickup | `0.97` → `1.08` across 4 bands |
-| $F_{\text{event}}$ | Event demand_impact | `1.00` / `1.07` / `1.15` |
+| $F_{\text{event}}$ | Event demand_impact | `1.00` / `1.02` / `1.10` / `1.25` |
+| $F_{\text{flight}}$| Urgent Causality (Stranded Pax) | `1.00` / `1.15` / `1.25` / `1.40` |
 
 #### Competitive Blending (when comp data exists)
 $$\text{Blended} = 0.7 \times \text{Target} + 0.3 \times \text{CompSetAverage}$$
