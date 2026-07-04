@@ -25,6 +25,7 @@ from anomaly import AnomalyDetector, AnomalyFlag
 from pricing_engine import DynamicPricingEngine, RateRecommendation
 from channel_updater import ChannelRateUpdater, ChannelUpdateResult
 from report import RevenueBriefGenerator
+from skills_memory import SkillsMemory
 
 
 class RevenueManagementAgent:
@@ -44,8 +45,12 @@ class RevenueManagementAgent:
         self.event_connector = EventCalendarConnector(events_path)
         self.history_connector = OccupancyHistoryConnector(occupancy_history_path)
         self.flight_connector = FlightCancellationConnector()
+        self.skills_memory = SkillsMemory()
 
-        self.anomaly_detector = AnomalyDetector()
+        self.anomaly_detector = AnomalyDetector(
+            watch_threshold=self.skills_memory.watch_threshold,
+            critical_threshold=self.skills_memory.critical_threshold
+        )
         self.pricing_engine = DynamicPricingEngine()
         self.channel_updater = ChannelRateUpdater()
         self.report_generator = RevenueBriefGenerator(
@@ -124,4 +129,5 @@ class RevenueManagementAgent:
             "events": events,
             "ai_commentary": ai_commentary,
             "flight_cancellation": flight_cancellation.__dict__ if flight_cancellation else None,
+            "rlhf_critical_threshold": self.skills_memory.critical_threshold,
         }

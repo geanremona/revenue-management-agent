@@ -164,6 +164,7 @@ def serialize_result(result):
         "held_back_dates": result["held_back_dates"],
         "ai_commentary": result.get("ai_commentary", ""),
         "flight_cancellation": result.get("flight_cancellation"),
+        "rlhf_critical_threshold": result.get("rlhf_critical_threshold", 150.0),
     }
 
 
@@ -219,6 +220,8 @@ def api_override_approve():
     try:
         # Manually push rate to channels
         results = agent.channel_updater.push_all(stay_date, float(rate))
+        # RLHF Reward: human approved the critical anomaly
+        agent.skills_memory.reward_agent()
     except ValueError as e:
         return jsonify({"status": "error", "message": str(e)}), 400
 
@@ -240,6 +243,18 @@ def api_override_dismiss():
     stay_date = data.get("stay_date")
     if not stay_date:
         return jsonify({"status": "error", "message": "Missing stay_date"}), 400
+
+    agent = build_agent()
+    
+    # Audit log the manual dismiss
+    logger.info(json.dumps({
+        "event": "human_override_dismissed",
+        "stay_date": stay_date,
+        "ip": request.remote_addr
+    }))
+    
+    # RLHF Penalty: human rejected the critical anomaly (false positive)
+    agent.skills_memory.penalize_agent()
 
     global _last_result
     if _last_result:

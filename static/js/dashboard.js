@@ -29,6 +29,12 @@ function renderAll(data) {
   renderChannels(data.channel_results);
   renderMarketIntel(data.competitor_rates, data.events, data.flight_cancellation);
   renderAISummary(data.ai_commentary);
+  
+  const thresholdBadge = document.getElementById('rlhf-threshold-badge');
+  if (thresholdBadge && data.rlhf_critical_threshold) {
+    thresholdBadge.textContent = `Agent Sensitivity: ${data.rlhf_critical_threshold}%`;
+  }
+  
   document.getElementById('generated-at').textContent = `Generated ${data.generated_at}`;
 }
 
