@@ -34,24 +34,40 @@ class RateRecommendation:
 
 
 class DynamicPricingEngine:
-    def __init__(self, min_rate: float = 120.0, max_rate: float = 320.0,
-                 max_step_pct: float = 15.0):
+    def __init__(self, min_rate: float = 120.0, max_rate: float = 400.0,
+                 max_step_pct: float = 20.0):
+        """Guardrail parameters.
+
+        Changes from original defaults:
+          max_rate:     $320 → $400  — captures premium event-night RevPAR
+          max_step_pct: 15%  → 20%  — allows more aggressive moves on high-demand dates
+        """
         self.min_rate = min_rate
         self.max_rate = max_rate
         self.max_step_pct = max_step_pct  # guardrail: max single-cycle rate move
 
     def _occupancy_factor(self, occ_pct: float) -> float:
+        """Demand-pressure multiplier based on occupancy on the books.
+
+        Sharpened from original to capture more yield at near-sellout
+        and discount more aggressively on soft dates to drive volume:
+          ≥95%: 1.12 → 1.20  (sellout premium)
+          ≥85%: 1.07 → 1.10
+          ≥70%: 1.02 → 1.04
+          ≥30%: 0.95 → 0.93  (deeper discount to stimulate demand)
+          <30%: 0.90 → 0.87
+        """
         if occ_pct >= 95:
-            return 1.12
+            return 1.20
         if occ_pct >= 85:
-            return 1.07
+            return 1.10
         if occ_pct >= 70:
-            return 1.02
+            return 1.04
         if occ_pct >= 45:
             return 1.00
         if occ_pct >= 30:
-            return 0.95
-        return 0.90
+            return 0.93
+        return 0.87
 
     def _pace_factor(self, pickup_last_7d: int) -> float:
         if pickup_last_7d >= 50:
@@ -63,9 +79,16 @@ class DynamicPricingEngine:
         return 0.97
 
     def _event_factor(self, event: Optional[EventRecord]) -> float:
+        """Event-demand catalyst multiplier.
+
+        Amplified from original to better monetise high-impact events:
+          high:   1.15 → 1.25
+          medium: 1.07 → 1.10
+          low:    1.00 → 1.02 (small lift even on low-impact days)
+        """
         if event is None:
             return 1.00
-        return {"high": 1.15, "medium": 1.07, "low": 1.00}.get(event.demand_impact, 1.00)
+        return {"high": 1.25, "medium": 1.10, "low": 1.02}.get(event.demand_impact, 1.00)
 
     def recommend(
         self,
@@ -92,11 +115,13 @@ class DynamicPricingEngine:
         base = booking.current_adr
         target = base * occ_factor * pace_factor * event_factor
 
-        # Blend toward the competitive market index so we don't drift too far from the set
+        # Blend toward the competitive market index (80/20 model-to-competitor)
+        # Shifted from original 70/30 — trusts own demand signal more,
+        # reduces anchoring to competitor set which may under-price on event dates.
         if market_index:
-            blended = 0.7 * target + 0.3 * market_index
+            blended = 0.80 * target + 0.20 * market_index
             rationale.append(
-                f"Competitor set average: ${market_index:.2f}. Blended 70/30 toward "
+                f"Competitor set average: ${market_index:.2f}. Blended 80/20 toward "
                 f"demand-driven target vs. market index."
             )
             target = blended
