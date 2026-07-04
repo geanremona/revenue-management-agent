@@ -91,10 +91,18 @@ class RevenueManagementAgent:
             events=events,
         )
 
+        # Revenue impact: total delta from current to recommended across all dates
+        revenue_impact = sum(
+            r.recommended_rate - r.current_rate for r in recommendations
+        )
+
         return {
             "recommendations": recommendations,
             "anomalies": anomalies,
             "channel_results": channel_results,
             "held_back_dates": held_back,
             "brief_markdown": brief_md,
+            "revenue_impact": round(revenue_impact, 2),
+            "competitor_rates": competitor_rates,
+            "events": events,
         }

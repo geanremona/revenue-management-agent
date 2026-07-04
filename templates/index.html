@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Revenue Pilot — AI-powered dynamic pricing dashboard for hotel revenue management. View rate recommendations, demand anomalies, and channel distribution status.">
+  <title>Revenue Pilot — {{ property_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/dashboard.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="header" id="header">
+    <div class="header__brand">
+      <div class="header__logo">
+        <span class="header__logo-icon">📊</span> Revenue Pilot
+      </div>
+      <span class="header__property" id="property-name">{{ property_name }}</span>
+    </div>
+    <span class="header__timestamp" id="generated-at"></span>
+    <button class="btn-rerun" id="btn-rerun" onclick="handleRerun()">
+      <span class="btn-rerun__icon">↻</span> Re-run Agent
+    </button>
+  </header>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">Running revenue analysis…</div>
+  </div>
+
+  <!-- Dashboard -->
+  <main class="dashboard" id="dashboard">
+
+    <!-- KPI Cards -->
+    <section class="kpi-grid" id="kpi-cards" aria-label="Key Performance Indicators">
+      <article class="card kpi-card kpi-card--revenue" id="kpi-revenue">
+        <div class="kpi-card__label">Revenue Impact</div>
+        <div class="kpi-card__value" id="kpi-revenue-value">—</div>
+        <div class="kpi-card__sub" id="kpi-revenue-sub">from rate adjustments</div>
+      </article>
+      <article class="card kpi-card" id="kpi-dates">
+        <div class="kpi-card__label">Dates Reviewed</div>
+        <div class="kpi-card__value" id="kpi-dates-value">—</div>
+        <div class="kpi-card__sub" id="kpi-dates-sub"></div>
+      </article>
+      <article class="card kpi-card kpi-card--anomalies" id="kpi-anomalies">
+        <div class="kpi-card__label">Anomalies Flagged</div>
+        <div class="kpi-card__value" id="kpi-anomalies-value">—</div>
+        <div class="kpi-card__sub" id="kpi-anomalies-badges"></div>
+      </article>
+      <article class="card kpi-card kpi-card--sync" id="kpi-sync">
+        <div class="kpi-card__label">Channel Sync</div>
+        <div class="kpi-card__value" id="kpi-sync-value">—</div>
+        <div class="kpi-card__sub" id="kpi-sync-sub"></div>
+        <svg class="progress-ring" viewBox="0 0 48 48" id="sync-ring">
+          <circle class="progress-ring__bg" cx="24" cy="24" r="20"/>
+          <circle class="progress-ring__fill" cx="24" cy="24" r="20"
+                  stroke-dasharray="125.66" stroke-dashoffset="125.66" id="sync-ring-fill"/>
+        </svg>
+      </article>
+    </section>
+
+    <!-- Rate Recommendations Chart -->
+    <section class="card chart-card" id="rate-chart-section" aria-label="Rate Recommendations">
+      <div class="section-header">
+        <span class="section-header__icon">💰</span>
+        <h2 class="section-header__title">Dynamic Rate Recommendations</h2>
+        <span class="section-header__count" id="chart-count"></span>
+      </div>
+      <div class="chart-container">
+        <canvas id="rate-chart"></canvas>
+      </div>
+    </section>
+
+    <!-- Insights: Anomalies + Events -->
+    <section class="insights-grid" aria-label="Insights">
+      <!-- Anomalies -->
+      <div class="card" id="anomalies-panel">
+        <div class="section-header">
+          <span class="section-header__icon">⚠️</span>
+          <h2 class="section-header__title">Demand Anomalies</h2>
+          <span class="section-header__count" id="anomalies-count"></span>
+        </div>
+        <div class="anomaly-list" id="anomaly-list"></div>
+      </div>
+      <!-- Events -->
+      <div class="card" id="events-panel">
+        <div class="section-header">
+          <span class="section-header__icon">📅</span>
+          <h2 class="section-header__title">Event Calendar Impact</h2>
+        </div>
+        <div class="event-list" id="event-list"></div>
+      </div>
+    </section>
+
+    <!-- Channel Distribution -->
+    <section class="card" id="channels-section" aria-label="Channel Distribution">
+      <div class="section-header">
+        <span class="section-header__icon">🔗</span>
+        <h2 class="section-header__title">Channel Distribution Log</h2>
+        <span class="section-header__count" id="channel-count"></span>
+      </div>
+      <div class="channel-table-wrap">
+        <table class="channel-table" id="channel-table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Stay Date</th>
+              <th>Channel</th>
+              <th>Rate Pushed</th>
+              <th>Detail</th>
+            </tr>
+          </thead>
+          <tbody id="channel-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Market Intelligence -->
+    <section class="card" id="intel-section" aria-label="Market Intelligence">
+      <div class="section-header">
+        <span class="section-header__icon">🏨</span>
+        <h2 class="section-header__title">Cited Market Intelligence</h2>
+      </div>
+      <div class="intel-grid">
+        <div id="intel-competitors">
+          <div class="intel-section__title">Competitor Rate Shopping</div>
+          <div id="intel-comp-list"></div>
+        </div>
+        <div id="intel-events">
+          <div class="intel-section__title">Event Calendar Catalysts</div>
+          <div id="intel-event-list"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    All recommendations are advisory. Rates are held to a ±15% per-cycle guardrail and
+    a $120–$320 floor/ceiling. A human revenue manager should confirm before any
+    critical-severity anomaly date goes live.
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
