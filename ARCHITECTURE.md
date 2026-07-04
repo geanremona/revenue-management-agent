@@ -14,6 +14,11 @@
         │                 │                   │                  │
         ▼                 ▼                   ▼                  ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
+│                      Cloudflare Workers AI (REST API)                        │
+└─────────────────────────────────────┬────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
 │                         src/  (Python Agent Pipeline)                        │
 │                                                                              │
 │  connectors.py ──► agent.py ──► anomaly.py ──► pricing_engine.py            │
@@ -43,13 +48,14 @@
 │  dashboard.js    → Fetch /api/data, render KPIs / chart / tables             │
 │                    handleApprove() / handleDismiss() → override APIs         │
 └──────────────────────────────────────────────────────────────────────────────┘
-                              │  reverse proxy (port 80 → 8080)
+                              │  Ingress (Traefik port 80 → K8s Service)
                               ▼
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                    Infrastructure (Vultr Ubuntu 24.04)                       │
+│                  Infrastructure (SUSE Rancher K3s on Vultr)                  │
 │                                                                              │
-│  Nginx  →  Gunicorn (2 workers)  →  Flask app                               │
-│  systemd: revenue-agent.service (User=deploy, WorkingDir=/home/deploy/…)    │
+│  Traefik ──► revenue-agent-service ──► revenue-agent Deployment (2 replicas) │
+│                                         (Gunicorn → Flask in Container)      │
+│  Secrets: cloudflare-secrets (K8s Secret) injected as Env Vars               │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -169,11 +175,12 @@ push_dates = {
 ### Stage 5 — REPORT (`src/report.py`)
 
 Assembles the human-readable `Revenue Strategy Brief` as a Markdown document. Sections:
-1. Executive Summary (headline numbers)
-2. Rate Recommendations table + full per-date rationale
-3. Demand Anomalies log
-4. Channel Distribution Log
-5. Cited Market Intelligence (competitor rates + events, each with source citation)
+1. **AI Market Commentary**: Generates a 2-3 sentence narrative summary using the **Cloudflare Workers AI REST API** (`@cf/meta/llama-3.1-8b-instruct`), explaining the primary drivers behind the rate decisions.
+2. Executive Summary (headline numbers)
+3. Rate Recommendations table + full per-date rationale
+4. Demand Anomalies log
+5. Channel Distribution Log
+6. Cited Market Intelligence (competitor rates + events, each with source citation)
 
 The same data is also serialized to JSON by `app.py::serialize_result()` for the dashboard.
 
@@ -258,37 +265,44 @@ User clicks "Approve & Push ($258.75)" on 2026-07-18
 
 ---
 
-## 5. Infrastructure & Deployment
+## 5. Infrastructure & Deployment (SUSE Rancher K3s)
+
+The application is deployed on a Vultr Ubuntu 24.04 VM (95.179.209.105) running a single-node **SUSE Rancher K3s** Kubernetes cluster.
 
 ```
-Vultr Ubuntu 24.04 VM  (95.179.209.105)
+Vultr Ubuntu 24.04 VM (K3s Node)
 │
-├── /etc/nginx/sites-enabled/revenue-agent
-│   └── listen 80; proxy_pass http://127.0.0.1:8080;
-│
-├── /etc/systemd/system/revenue-agent.service
-│   ├── User=deploy
-│   ├── WorkingDirectory=/home/deploy/revenue_agent
-│   └── ExecStart=gunicorn -b 0.0.0.0:8080 -w 2 app:app
+├── Kubernetes Resources
+│   ├── namespace: default
+│   ├── deployment/revenue-agent (2 replicas)
+│   ├── service/revenue-agent-service (ClusterIP)
+│   ├── ingress/revenue-agent-ingress (Traefik routing port 80 → Service)
+│   └── secret/cloudflare-secrets (Env vars for Cloudflare AI)
 │
 └── /home/deploy/revenue_agent/
-    ├── .venv/              (Python 3.14 virtualenv)
+    ├── k8s/                (Manifests: deployment, service, ingress)
     ├── src/                (pipeline modules)
     ├── data/               (CSV/JSON sample data)
     ├── static/             (CSS + JS)
     ├── templates/          (Jinja2 HTML)
-    ├── references/         (data_schemas.md)
-    └── app.py              (Flask entrypoint)
+    ├── app.py              (Flask entrypoint)
+    ├── Dockerfile          (Container build spec)
+    └── DEPLOY.md           (Deployment guide)
 ```
 
-**Deployment cycle:**
+**Deployment Cycle (Container-Native):**
 ```bash
-# Local
-git push origin main
+# 1. Pull latest code on the server
+git pull
 
-# Server (automated via SSH key)
-git -C /home/deploy/revenue_agent pull
-systemctl restart revenue-agent
+# 2. Build the Docker image locally
+sudo docker build -t revenue-agent:latest .
+
+# 3. Import image into K3s containerd (avoiding public registry)
+sudo docker save revenue-agent:latest | sudo k3s ctr images import -
+
+# 4. Rollout the deployment
+sudo KUBECONFIG=/etc/rancher/k3s/k3s.yaml kubectl rollout restart deployment revenue-agent
 ```
 
 ---
@@ -298,11 +312,11 @@ systemctl restart revenue-agent
 | Layer | State | Lifetime |
 |---|---|---|
 | Agent pipeline | Stateless — reads files, returns dict | Per-run (milliseconds) |
-| `_last_result` cache | In-memory dict in Gunicorn worker | Until next `/api/run` call or process restart |
+| `_last_result` cache | In-memory dict in Gunicorn worker | Until next `/api/run` call or Pod restart. **Note:** With 2 replicas, manual refreshes might hit different pods. In production, swap for Redis. |
 | Historical baselines | `occupancy_history.csv` read fresh each run | Per-run |
 | YoY lookback window | 364 days (same weekday alignment) | Hardcoded in `OccupancyHistoryConnector` |
 | Override state | In `_last_result["held_back_dates"]` list | Until next agent re-run |
-| Brief file | `revenue_strategy_brief.md` on disk | Persists across restarts |
+| Brief file | `revenue_strategy_brief.md` on pod disk | Ephemeral to the Pod's lifecycle |
 
 ---
 
