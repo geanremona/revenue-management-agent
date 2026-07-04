@@ -1,10 +1,10 @@
-# Revenue Strategy Brief — Harborview Grand (Demo)
-*Generated 2026-07-04 14:43 by Revenue Management Agent*
+# Revenue Strategy Brief — Revenue Pilot Test
+*Generated 2026-07-04 21:10 by Revenue Management Agent*
 
 ## Executive Summary
 - Reviewed **15** stay dates. Recommending **9 rate increases**, **6 decreases**, **0 holds**.
 - **9 demand anomalies** flagged (3 critical) — see Section 3 before approving pushes.
-- Channel sync: **43/48** rate pushes confirmed live, **5 queued for retry**.
+- Channel sync: **47/48** rate pushes confirmed live, **1 queued for retry**.
 
 ## 1. Dynamic Rate Recommendations
 | Stay Date | Current | Recommended | Δ% | Occupancy | Event |
@@ -123,9 +123,9 @@
 | 2026-07-11 | GDS | $192.78 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-12 | Direct Booking Engine | $224.25 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-12 | Booking.com | $224.25 | ✅ success | Rate confirmed live on channel. |
-| 2026-07-12 | Expedia | $224.25 | ⚠️ failed | Timeout from channel endpoint — queued for retry. |
+| 2026-07-12 | Expedia | $224.25 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-12 | GDS | $224.25 | ✅ success | Rate confirmed live on channel. |
-| 2026-07-14 | Direct Booking Engine | $163.18 | ⚠️ failed | Timeout from channel endpoint — queued for retry. |
+| 2026-07-14 | Direct Booking Engine | $163.18 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-14 | Booking.com | $163.18 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-14 | Expedia | $163.18 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-14 | GDS | $163.18 | ✅ success | Rate confirmed live on channel. |
@@ -142,7 +142,7 @@
 | 2026-07-19 | Expedia | $202.98 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-19 | GDS | $202.98 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-20 | Direct Booking Engine | $198.90 | ✅ success | Rate confirmed live on channel. |
-| 2026-07-20 | Booking.com | $198.90 | ⚠️ failed | Timeout from channel endpoint — queued for retry. |
+| 2026-07-20 | Booking.com | $198.90 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-20 | Expedia | $198.90 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-20 | GDS | $198.90 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-21 | Direct Booking Engine | $168.31 | ✅ success | Rate confirmed live on channel. |
@@ -151,10 +151,10 @@
 | 2026-07-21 | GDS | $168.31 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-22 | Direct Booking Engine | $164.03 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-22 | Booking.com | $164.03 | ✅ success | Rate confirmed live on channel. |
-| 2026-07-22 | Expedia | $164.03 | ⚠️ failed | Timeout from channel endpoint — queued for retry. |
+| 2026-07-22 | Expedia | $164.03 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-22 | GDS | $164.03 | ✅ success | Rate confirmed live on channel. |
-| 2026-07-23 | Direct Booking Engine | $163.11 | ⚠️ failed | Timeout from channel endpoint — queued for retry. |
-| 2026-07-23 | Booking.com | $163.11 | ✅ success | Rate confirmed live on channel. |
+| 2026-07-23 | Direct Booking Engine | $163.11 | ✅ success | Rate confirmed live on channel. |
+| 2026-07-23 | Booking.com | $163.11 | ⚠️ failed | Timeout from channel endpoint — queued for retry. |
 | 2026-07-23 | Expedia | $163.11 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-23 | GDS | $163.11 | ✅ success | Rate confirmed live on channel. |
 | 2026-07-24 | Direct Booking Engine | $211.96 | ✅ success | Rate confirmed live on channel. |
