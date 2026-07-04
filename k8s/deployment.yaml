@@ -15,15 +15,21 @@ spec:
         app: revenue-agent
     spec:
       containers:
-      - name: web
-        image: revenue-agent:latest
-        imagePullPolicy: Never # Because we'll load the image directly into containerd
-        ports:
-        - containerPort: 8080
-        env:
-        - name: PROPERTY_NAME
-          value: "Harborview Grand (Demo)"
-        - name: CLOUDFLARE_ACCOUNT_ID
-          value: "" # Fill this in when credentials are provided
-        - name: CLOUDFLARE_API_TOKEN
-          value: "" # Fill this in when credentials are provided
+        - name: web
+          image: revenue-agent:latest
+          imagePullPolicy: Never # Because we'll load the image directly into containerd
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PROPERTY_NAME
+              value: "Harborview Grand (Demo)"
+            - name: CLOUDFLARE_ACCOUNT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-secrets
+                  key: account-id
+            - name: CLOUDFLARE_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: cloudflare-secrets
+                  key: api-token
