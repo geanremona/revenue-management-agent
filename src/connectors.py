@@ -64,19 +64,29 @@ class BookingDataConnector:
         self.path = Path(path)
 
     def fetch(self) -> List[BookingRecord]:
+        records = []
         with open(self.path, newline="") as f:
             reader = csv.DictReader(f)
-            return [
-                BookingRecord(
-                    stay_date=row["stay_date"],
-                    bookings_on_the_books=int(row["bookings_on_the_books"]),
-                    rooms_available=int(row["rooms_available"]),
-                    current_adr=float(row["current_adr"]),
-                    avg_length_of_stay=float(row["avg_length_of_stay"]),
-                    pickup_last_7d=int(row["pickup_last_7d"]),
-                )
-                for row in reader
-            ]
+            for row in reader:
+                try:
+                    bob = int(row["bookings_on_the_books"])
+                    avail = int(row["rooms_available"])
+                    adr = float(row["current_adr"])
+                    
+                    if bob < 0 or avail <= 0 or adr < 0:
+                        continue # Skip invalid data poisoning attempts
+                        
+                    records.append(BookingRecord(
+                        stay_date=row["stay_date"],
+                        bookings_on_the_books=bob,
+                        rooms_available=avail,
+                        current_adr=adr,
+                        avg_length_of_stay=float(row["avg_length_of_stay"]),
+                        pickup_last_7d=int(row["pickup_last_7d"]),
+                    ))
+                except (ValueError, TypeError):
+                    continue
+        return records
 
 
 class CompetitorPricingConnector:
@@ -84,17 +94,23 @@ class CompetitorPricingConnector:
         self.path = Path(path)
 
     def fetch(self) -> List[CompetitorRate]:
+        records = []
         with open(self.path, newline="") as f:
             reader = csv.DictReader(f)
-            return [
-                CompetitorRate(
-                    stay_date=row["stay_date"],
-                    competitor=row["competitor"],
-                    rate=float(row["rate"]),
-                    source=row["source"],
-                )
-                for row in reader
-            ]
+            for row in reader:
+                try:
+                    rate = float(row["rate"])
+                    if rate < 0 or rate > 10000:
+                        continue # Guard against absurdly high or negative competitive rates
+                    records.append(CompetitorRate(
+                        stay_date=row["stay_date"],
+                        competitor=row["competitor"],
+                        rate=rate,
+                        source=row["source"],
+                    ))
+                except (ValueError, TypeError):
+                    continue
+        return records
 
     def market_index_by_date(self) -> Dict[str, float]:
         """Average competitor set rate per stay date -> our benchmark price point."""
@@ -110,9 +126,17 @@ class EventCalendarConnector:
         self.path = Path(path)
 
     def fetch(self) -> List[EventRecord]:
+        records = []
         with open(self.path) as f:
             raw = json.load(f)
-        return [EventRecord(**item) for item in raw]
+        for item in raw:
+            # Validate to prevent prompt injection or data poisoning via events
+            if item.get("demand_impact") not in ("high", "medium", "low"):
+                continue
+            if not isinstance(item.get("expected_attendance"), int) or item["expected_attendance"] < 0:
+                continue
+            records.append(EventRecord(**item))
+        return records
 
     def impact_by_date(self) -> Dict[str, EventRecord]:
         """Expand each event's date range into a per-day impact lookup."""
@@ -133,17 +157,25 @@ class OccupancyHistoryConnector:
         self.path = Path(path)
 
     def fetch(self) -> List[OccupancyHistoryRecord]:
+        records = []
         with open(self.path, newline="") as f:
             reader = csv.DictReader(f)
-            return [
-                OccupancyHistoryRecord(
-                    stay_date_ly=row["stay_date_ly"],
-                    occupancy_pct_ly=float(row["occupancy_pct_ly"]),
-                    adr_ly=float(row["adr_ly"]),
-                    revpar_ly=float(row["revpar_ly"]),
-                )
-                for row in reader
-            ]
+            for row in reader:
+                try:
+                    occ = float(row["occupancy_pct_ly"])
+                    adr = float(row["adr_ly"])
+                    revpar = float(row["revpar_ly"])
+                    if not (0 <= occ <= 100) or adr < 0 or revpar < 0:
+                        continue
+                    records.append(OccupancyHistoryRecord(
+                        stay_date_ly=row["stay_date_ly"],
+                        occupancy_pct_ly=occ,
+                        adr_ly=adr,
+                        revpar_ly=revpar,
+                    ))
+                except (ValueError, TypeError):
+                    continue
+        return records
 
     def by_current_date(self, current_stay_date: str) -> OccupancyHistoryRecord | None:
         """Map a current stay date to its same-weekday-last-year counterpart (~364 days back)."""

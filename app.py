@@ -15,9 +15,16 @@ import os
 import sys
 from datetime import datetime
 from flask import Flask, jsonify, Response, render_template, request
+import logging
+import json
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from agent import RevenueManagementAgent  # noqa: E402
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 BASE = os.path.dirname(__file__)
 BRIEF_PATH = os.path.join(BASE, "revenue_strategy_brief.md")
@@ -26,6 +33,13 @@ app = Flask(
     __name__,
     template_folder=os.path.join(BASE, "templates"),
     static_folder=os.path.join(BASE, "static"),
+)
+
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://"
 )
 
 # In-memory cache of the last agent run result
@@ -177,12 +191,14 @@ def run_via_browser():
 
 
 @app.post("/api/run")
+@limiter.limit("5 per minute")
 def api_run():
     result = run_and_cache()
     return jsonify(serialize_result(result))
 
 
 @app.post("/api/override/approve")
+@limiter.limit("20 per minute")
 def api_override_approve():
     data = request.get_json() or {}
     stay_date = data.get("stay_date")
@@ -191,8 +207,20 @@ def api_override_approve():
         return jsonify({"status": "error", "message": "Missing stay_date or rate"}), 400
 
     agent = build_agent()
-    # Manually push rate to channels
-    results = agent.channel_updater.push_all(stay_date, float(rate))
+    
+    # Audit log the manual override
+    logger.info(json.dumps({
+        "event": "human_override_approved",
+        "stay_date": stay_date,
+        "rate_requested": rate,
+        "ip": request.remote_addr
+    }))
+
+    try:
+        # Manually push rate to channels
+        results = agent.channel_updater.push_all(stay_date, float(rate))
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
 
     # Update memory cache in app.py if it exists
     global _last_result

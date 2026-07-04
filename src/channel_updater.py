@@ -13,6 +13,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Dict
 import random
+import logging
+import json
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 
 @dataclass
@@ -33,7 +38,21 @@ class ChannelRateUpdater:
 
     def push_rate(self, stay_date: str, rate: float, channel: str) -> ChannelUpdateResult:
         """Simulated API call. Replace body with a real channel-manager API call."""
+        if rate < 120.0 or rate > 400.0:
+            logger.error(json.dumps({"event": "guardrail_violation", "stay_date": stay_date, "rate": rate, "channel": channel}))
+            raise ValueError(f"Rate {rate} violates absolute safety guardrails ($120 - $400). Push aborted.")
+            
         failed = self.simulate_failures and random.random() < 0.05  # ~5% transient failure rate
+        
+        log_payload = {
+            "event": "channel_push",
+            "stay_date": stay_date,
+            "rate_pushed": rate,
+            "channel": channel,
+            "status": "failed" if failed else "success"
+        }
+        logger.info(json.dumps(log_payload))
+
         if failed:
             return ChannelUpdateResult(
                 stay_date=stay_date, channel=channel, rate_pushed=rate,
