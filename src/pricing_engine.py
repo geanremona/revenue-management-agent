@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional, List
 
-from connectors import BookingRecord, EventRecord
+from connectors import BookingRecord, EventRecord, FlightCancellationRecord
 
 
 @dataclass
@@ -30,6 +30,7 @@ class RateRecommendation:
     market_index: Optional[float]
     occupancy_pct: float
     event: Optional[str]
+    flight_cancellation: Optional[str]
     rationale: List[str] = field(default_factory=list)
 
 
@@ -90,11 +91,22 @@ class DynamicPricingEngine:
             return 1.00
         return {"high": 1.25, "medium": 1.10, "low": 1.02}.get(event.demand_impact, 1.00)
 
+    def _flight_cancellation_factor(self, cancellation: Optional[FlightCancellationRecord]) -> float:
+        """Surge multiplier for stranded passengers."""
+        if not cancellation or cancellation.estimated_stranded_passengers < 50:
+            return 1.00
+        if cancellation.estimated_stranded_passengers >= 1000:
+            return 1.40
+        if cancellation.estimated_stranded_passengers >= 500:
+            return 1.25
+        return 1.15
+
     def recommend(
         self,
         booking: BookingRecord,
         market_index: Optional[float],
         event: Optional[EventRecord],
+        flight_cancellation: Optional[FlightCancellationRecord] = None,
     ) -> RateRecommendation:
         rationale: List[str] = []
 
@@ -112,8 +124,14 @@ class DynamicPricingEngine:
         else:
             rationale.append("No material event on the calendar for this date.")
 
+        flight_factor = self._flight_cancellation_factor(flight_cancellation)
+        if flight_cancellation and flight_factor > 1.0:
+            rationale.append(f"CRITICAL CAUSALITY: {flight_cancellation.cancelled_flights} flight cancellations detected. "
+                             f"~{flight_cancellation.estimated_stranded_passengers} stranded passengers. "
+                             f"Applying surge factor x{flight_factor:.2f}.")
+
         base = booking.current_adr
-        target = base * occ_factor * pace_factor * event_factor
+        target = base * occ_factor * pace_factor * event_factor * flight_factor
 
         # Blend toward the competitive market index (80/20 model-to-competitor)
         # Shifted from original 70/30 — trusts own demand signal more,
@@ -150,5 +168,6 @@ class DynamicPricingEngine:
             market_index=market_index,
             occupancy_pct=booking.occupancy_pct,
             event=event.event if event else None,
+            flight_cancellation=f"{flight_cancellation.cancelled_flights} cancelled flights" if flight_cancellation else None,
             rationale=rationale,
         )

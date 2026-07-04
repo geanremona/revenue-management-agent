@@ -154,3 +154,26 @@ class OccupancyHistoryConnector:
             if rec.stay_date_ly == ly_date:
                 return rec
         return None
+
+
+@dataclass
+class FlightCancellationRecord:
+    stay_date: str
+    cancelled_flights: int
+    estimated_stranded_passengers: int
+    source: str
+
+
+class FlightCancellationConnector:
+    def __init__(self):
+        pass
+
+    def fetch_live_cancellations(self) -> FlightCancellationRecord | None:
+        """Simulate a live API pull from local airport showing a major storm today."""
+        # For the hackathon demo, we hardcode "tonight" as 2026-07-10
+        return FlightCancellationRecord(
+            stay_date="2026-07-10",
+            cancelled_flights=42,
+            estimated_stranded_passengers=1250,
+            source="airport_live_status_api"
+        )

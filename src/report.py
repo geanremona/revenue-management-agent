@@ -15,7 +15,7 @@ import os
 from pricing_engine import RateRecommendation
 from anomaly import AnomalyFlag
 from channel_updater import ChannelUpdateResult
-from connectors import CompetitorRate, EventRecord
+from connectors import CompetitorRate, EventRecord, FlightCancellationRecord
 
 
 def _fmt_money(x: float) -> str:
@@ -33,11 +33,12 @@ class RevenueBriefGenerator:
         self.cf_account_id = cloudflare_account_id or os.environ.get("CLOUDFLARE_ACCOUNT_ID")
         self.cf_api_token = cloudflare_api_token or os.environ.get("CLOUDFLARE_API_TOKEN")
 
-    def _generate_ai_commentary(
+    def generate_ai_commentary(
         self,
         recommendations: List[RateRecommendation],
         anomalies: List[AnomalyFlag],
-        events: List[EventRecord]
+        events: List[EventRecord],
+        flight_cancellation: FlightCancellationRecord | None = None
     ) -> str:
         """Calls Cloudflare Workers AI to generate a narrative market commentary."""
         if not self.cf_account_id or not self.cf_api_token:
@@ -60,6 +61,11 @@ class RevenueBriefGenerator:
             context_lines.append("Key Events:")
             for e in events:
                 context_lines.append(f" - {e.event} ({e.start_date} to {e.end_date}), Impact: {e.demand_impact}")
+        if flight_cancellation:
+            context_lines.append(
+                f"Flight Cancellations (URGENT CAUSALITY): {flight_cancellation.cancelled_flights} flights cancelled "
+                f"on {flight_cancellation.stay_date}, stranding approx. {flight_cancellation.estimated_stranded_passengers} passengers."
+            )
 
         prompt = (
             "You are an expert revenue manager. Based on the following data for this pricing cycle, "
@@ -86,6 +92,7 @@ class RevenueBriefGenerator:
         channel_results: List[ChannelUpdateResult],
         competitor_rates: List[CompetitorRate],
         events: List[EventRecord],
+        ai_commentary: str = "",
     ) -> str:
         now = datetime.now().strftime("%Y-%m-%d %H:%M")
         lines: List[str] = []
@@ -116,10 +123,10 @@ class RevenueBriefGenerator:
         lines.append("")
 
         # --- AI Market Commentary ---
-        lines.append("## AI Market Commentary")
-        ai_commentary = self._generate_ai_commentary(recommendations, anomalies, events)
-        lines.append(ai_commentary)
-        lines.append("")
+        if ai_commentary:
+            lines.append("## AI Market Commentary")
+            lines.append(ai_commentary)
+            lines.append("")
 
         # --- Rate recommendations ---
         lines.append("## 1. Dynamic Rate Recommendations")

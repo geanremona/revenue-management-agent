@@ -27,8 +27,19 @@ function renderAll(data) {
   renderAnomalies(data.anomalies, data.held_back_dates, data.recommendations);
   renderEvents(data.events);
   renderChannels(data.channel_results);
-  renderMarketIntel(data.competitor_rates, data.events);
+  renderMarketIntel(data.competitor_rates, data.events, data.flight_cancellation);
+  renderAISummary(data.ai_commentary);
   document.getElementById('generated-at').textContent = `Generated ${data.generated_at}`;
+}
+
+// --- AI Summary ---
+function renderAISummary(text) {
+  const container = document.getElementById('ai-summary-text');
+  if (text) {
+    container.innerHTML = text.replace(/\n/g, '<br>');
+  } else {
+    container.innerHTML = '<em>AI commentary disabled or unavailable.</em>';
+  }
 }
 
 // --- Animated Counter ---
@@ -212,7 +223,8 @@ function renderAnomalies(anomalies, heldBackDates = [], recommendations = []) {
       actionHtml = `
         <div class="anomaly-item__actions">
           <button class="btn-action btn-action--approve" onclick="handleApprove('${a.stay_date}', ${recRate})">Approve & Push ($${recRate.toFixed(2)})</button>
-          <button class="btn-action btn-action--dismiss" onclick="handleDismiss('${a.stay_date}')">Dismiss</button>
+          <span class="badge badge--fail-safe">⚠️ Auto-Publish Blocked (Human Review Required)</span>
+          <button class="btn-action btn-action--dismiss" style="margin-left:auto;" onclick="handleDismiss('${a.stay_date}')">Dismiss</button>
         </div>
       `;
     }
@@ -279,7 +291,7 @@ function renderChannels(results) {
 }
 
 // --- Market Intelligence ---
-function renderMarketIntel(competitorRates, events) {
+function renderMarketIntel(competitorRates, events, flightCancellation) {
   // Competitor rates grouped by date
   const compList = document.getElementById('intel-comp-list');
   const byDate = {};
@@ -302,6 +314,11 @@ function renderMarketIntel(competitorRates, events) {
     `~${e.expected_attendance.toLocaleString()} attendees, impact: ${e.demand_impact} ` +
     `<em>(${e.source})</em></div>`
   ).join('');
+
+  // Flight Cancellations (Wow Factor)
+  if (flightCancellation) {
+    eventList.innerHTML += `<div class="intel-item" style="border-left: 3px solid var(--accent-red); padding-left: 8px; margin-top: 8px; background: rgba(239, 68, 68, 0.05);"><strong>🚨 Urgent Catalyst</strong>: ${flightCancellation.cancelled_flights} flight cancellations detected on ${flightCancellation.stay_date}. ~${flightCancellation.estimated_stranded_passengers} stranded passengers. <em>(${flightCancellation.source})</em></div>`;
+  }
 }
 
 // --- Rerun ---

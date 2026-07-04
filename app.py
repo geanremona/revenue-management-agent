@@ -148,6 +148,8 @@ def serialize_result(result):
             for e in events
         ],
         "held_back_dates": result["held_back_dates"],
+        "ai_commentary": result.get("ai_commentary", ""),
+        "flight_cancellation": result.get("flight_cancellation"),
     }
 
 

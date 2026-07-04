@@ -19,6 +19,7 @@ from typing import List, Dict
 from connectors import (
     BookingDataConnector, CompetitorPricingConnector,
     EventCalendarConnector, OccupancyHistoryConnector,
+    FlightCancellationConnector,
 )
 from anomaly import AnomalyDetector, AnomalyFlag
 from pricing_engine import DynamicPricingEngine, RateRecommendation
@@ -42,6 +43,7 @@ class RevenueManagementAgent:
         self.competitor_connector = CompetitorPricingConnector(competitor_path)
         self.event_connector = EventCalendarConnector(events_path)
         self.history_connector = OccupancyHistoryConnector(occupancy_history_path)
+        self.flight_connector = FlightCancellationConnector()
 
         self.anomaly_detector = AnomalyDetector()
         self.pricing_engine = DynamicPricingEngine()
@@ -61,6 +63,7 @@ class RevenueManagementAgent:
         market_index = self.competitor_connector.market_index_by_date()
         events = self.event_connector.fetch()
         event_by_date = self.event_connector.impact_by_date()
+        flight_cancellation = self.flight_connector.fetch_live_cancellations()
 
         # 2. ANALYZE — anomaly detection
         anomalies: List[AnomalyFlag] = self.anomaly_detector.detect(
@@ -75,6 +78,7 @@ class RevenueManagementAgent:
                 booking=b,
                 market_index=market_index.get(b.stay_date),
                 event=event_by_date.get(b.stay_date),
+                flight_cancellation=flight_cancellation if flight_cancellation and flight_cancellation.stay_date == b.stay_date else None,
             )
             recommendations.append(rec)
 
@@ -89,12 +93,19 @@ class RevenueManagementAgent:
         channel_results: List[ChannelUpdateResult] = self.channel_updater.push_batch(push_dates)
 
         # 5. REPORT
+        ai_commentary = self.report_generator.generate_ai_commentary(
+            recommendations=recommendations,
+            anomalies=anomalies,
+            events=events,
+            flight_cancellation=flight_cancellation
+        )
         brief_md = self.report_generator.build(
             recommendations=recommendations,
             anomalies=anomalies,
             channel_results=channel_results,
             competitor_rates=competitor_rates,
             events=events,
+            ai_commentary=ai_commentary,
         )
 
         # Revenue impact: total delta from current to recommended across all dates
@@ -111,4 +122,6 @@ class RevenueManagementAgent:
             "revenue_impact": round(revenue_impact, 2),
             "competitor_rates": competitor_rates,
             "events": events,
+            "ai_commentary": ai_commentary,
+            "flight_cancellation": flight_cancellation.__dict__ if flight_cancellation else None,
         }
