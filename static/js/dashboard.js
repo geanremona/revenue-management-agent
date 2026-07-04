@@ -24,7 +24,7 @@ async function fetchDashboardData() {
 function renderAll(data) {
   renderKPICards(data.summary);
   renderRateChart(data.recommendations);
-  renderAnomalies(data.anomalies);
+  renderAnomalies(data.anomalies, data.held_back_dates, data.recommendations);
   renderEvents(data.events);
   renderChannels(data.channel_results);
   renderMarketIntel(data.competitor_rates, data.events);
@@ -188,7 +188,7 @@ function renderRateChart(recommendations) {
 }
 
 // --- Anomalies ---
-function renderAnomalies(anomalies) {
+function renderAnomalies(anomalies, heldBackDates = [], recommendations = []) {
   const container = document.getElementById('anomaly-list');
   document.getElementById('anomalies-count').textContent = `${anomalies.length} flagged`;
 
@@ -201,15 +201,33 @@ function renderAnomalies(anomalies) {
     const sev = a.severity.toLowerCase();
     const deltaSign = a.delta_pct > 0 ? '+' : '';
     const deltaClass = a.delta_pct > 0 ? 'delta--positive' : 'delta--negative';
+    
+    // Check if this anomaly is currently held back
+    const isHeldBack = heldBackDates.includes(a.stay_date) && sev === 'critical';
+    
+    let actionHtml = '';
+    if (isHeldBack) {
+      const rec = recommendations.find(r => r.stay_date === a.stay_date);
+      const recRate = rec ? rec.recommended_rate : 0;
+      actionHtml = `
+        <div class="anomaly-item__actions">
+          <button class="btn-action btn-action--approve" onclick="handleApprove('${a.stay_date}', ${recRate})">Approve & Push ($${recRate.toFixed(2)})</button>
+          <button class="btn-action btn-action--dismiss" onclick="handleDismiss('${a.stay_date}')">Dismiss</button>
+        </div>
+      `;
+    }
+
     return `
       <div class="anomaly-item anomaly-item--${sev}">
         <div class="anomaly-item__body">
           <div class="anomaly-item__date">
             ${a.stay_date}
             <span class="badge badge--${sev}" style="margin-left:8px">${a.severity}</span>
+            ${isHeldBack ? '<span class="badge badge--held-back" style="margin-left:8px">Held Back</span>' : ''}
           </div>
           <div class="anomaly-item__metric">${a.metric} — current: ${a.current_value} vs baseline: ${a.baseline_value}</div>
           <div class="anomaly-item__note">${a.note}</div>
+          ${actionHtml}
         </div>
         <div class="anomaly-item__delta ${deltaClass}">${deltaSign}${a.delta_pct}%</div>
       </div>`;
@@ -306,3 +324,53 @@ async function handleRerun() {
     overlay.classList.remove('active');
   }
 }
+
+// --- Manual Action Handlers ---
+async function handleApprove(stayDate, rate) {
+  if (!confirm(`Are you sure you want to approve and push the rate of $${rate.toFixed(2)} for ${stayDate}?`)) {
+    return;
+  }
+  
+  const overlay = document.getElementById('loading-overlay');
+  overlay.classList.add('active');
+  
+  try {
+    const res = await fetch('/api/override/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stay_date: stayDate, rate: rate })
+    });
+    if (!res.ok) throw new Error('Override failed');
+    await fetchDashboardData();
+  } catch (err) {
+    console.error('Approve error:', err);
+    alert('Failed to approve rate. Check console for details.');
+  } finally {
+    overlay.classList.remove('active');
+  }
+}
+
+async function handleDismiss(stayDate) {
+  if (!confirm(`Are you sure you want to dismiss the alert for ${stayDate}? The rate will NOT be pushed.`)) {
+    return;
+  }
+  
+  const overlay = document.getElementById('loading-overlay');
+  overlay.classList.add('active');
+  
+  try {
+    const res = await fetch('/api/override/dismiss', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stay_date: stayDate })
+    });
+    if (!res.ok) throw new Error('Dismiss failed');
+    await fetchDashboardData();
+  } catch (err) {
+    console.error('Dismiss error:', err);
+    alert('Failed to dismiss alert.');
+  } finally {
+    overlay.classList.remove('active');
+  }
+}
+

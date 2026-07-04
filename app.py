@@ -14,7 +14,7 @@ Routes:
 import os
 import sys
 from datetime import datetime
-from flask import Flask, jsonify, Response, render_template
+from flask import Flask, jsonify, Response, render_template, request
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 from agent import RevenueManagementAgent  # noqa: E402
@@ -176,6 +176,46 @@ def run_via_browser():
 def api_run():
     result = run_and_cache()
     return jsonify(serialize_result(result))
+
+
+@app.post("/api/override/approve")
+def api_override_approve():
+    data = request.get_json() or {}
+    stay_date = data.get("stay_date")
+    rate = data.get("rate")
+    if not stay_date or not rate:
+        return jsonify({"status": "error", "message": "Missing stay_date or rate"}), 400
+
+    agent = build_agent()
+    # Manually push rate to channels
+    results = agent.channel_updater.push_all(stay_date, float(rate))
+
+    # Update memory cache in app.py if it exists
+    global _last_result
+    if _last_result:
+        # Extend current logs
+        _last_result["channel_results"].extend(results)
+        # Remove from held_back list
+        if stay_date in _last_result["held_back_dates"]:
+            _last_result["held_back_dates"].remove(stay_date)
+
+    return jsonify({"status": "success", "results": [r.__dict__ for r in results]})
+
+
+@app.post("/api/override/dismiss")
+def api_override_dismiss():
+    data = request.get_json() or {}
+    stay_date = data.get("stay_date")
+    if not stay_date:
+        return jsonify({"status": "error", "message": "Missing stay_date"}), 400
+
+    global _last_result
+    if _last_result:
+        # Remove from held_back list so it is no longer flagged as held-back
+        if stay_date in _last_result["held_back_dates"]:
+            _last_result["held_back_dates"].remove(stay_date)
+
+    return jsonify({"status": "success"})
 
 
 @app.get("/api/brief")

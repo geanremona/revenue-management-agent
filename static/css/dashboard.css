@@ -616,3 +616,52 @@ body::before {
   .kpi-grid { grid-template-columns: 1fr; }
   .header__property { display: none; }
 }
+
+/* --- Action Overrides for Anomalies --- */
+.anomaly-item__actions {
+  display: flex;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+.btn-action {
+  padding: 6px 12px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font);
+}
+
+.btn-action--approve {
+  background: rgba(45, 212, 191, 0.15);
+  color: var(--accent-teal);
+  border: 1px solid rgba(45, 212, 191, 0.3);
+}
+
+.btn-action--approve:hover {
+  background: var(--accent-teal);
+  color: var(--text-inverse);
+  box-shadow: 0 0 12px rgba(45, 212, 191, 0.25);
+}
+
+.btn-action--dismiss {
+  background: rgba(249, 112, 102, 0.12);
+  color: var(--accent-coral);
+  border: 1px solid rgba(249, 112, 102, 0.25);
+}
+
+.btn-action--dismiss:hover {
+  background: var(--accent-coral);
+  color: var(--text-inverse);
+  box-shadow: 0 0 12px rgba(249, 112, 102, 0.2);
+}
+
+.badge--held-back {
+  background: rgba(249, 112, 102, 0.15);
+  color: var(--accent-coral);
+  border: 1px solid rgba(249, 112, 102, 0.3);
+}
+
