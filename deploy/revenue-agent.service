@@ -1,0 +1,14 @@
+[Unit]
+Description=Revenue Management Agent
+After=network.target
+
+[Service]
+User=deploy
+WorkingDirectory=/home/deploy/revenue_agent
+Environment="PATH=/home/deploy/revenue_agent/.venv/bin"
+ExecStart=/home/deploy/revenue_agent/.venv/bin/gunicorn -b 0.0.0.0:8080 -w 2 app:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

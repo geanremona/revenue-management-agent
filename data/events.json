@@ -1,0 +1,5 @@
+[
+  {"event": "Regional Tech Summit", "start_date": "2026-07-17", "end_date": "2026-07-18", "expected_attendance": 12000, "demand_impact": "high", "source": "city_convention_bureau_feed"},
+  {"event": "Riverside Music Festival", "start_date": "2026-07-12", "end_date": "2026-07-13", "expected_attendance": 8000, "demand_impact": "medium", "source": "city_events_api"},
+  {"event": "Mid-week lull (no events)", "start_date": "2026-07-14", "end_date": "2026-07-16", "expected_attendance": 0, "demand_impact": "low", "source": "city_events_api"}
+]
